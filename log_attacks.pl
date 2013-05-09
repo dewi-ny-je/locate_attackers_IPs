@@ -23,7 +23,7 @@ use Net::Ping;
 #$\ = "\n";
 
 # checks for reachability of the iplocator and of Internet in general
-if (check_online()) { exit 1; }
+check_online();
 
 # parameters
 my $datafile = '/Users/olaf/UNIX/locate_attackers_IPs/data/list.txt';
@@ -47,7 +47,7 @@ while (@input > 0) {
 	my $line = $input[0];
 	# empty line, remove and continue
 	if ($line =~ /^\s*$/) {
-		print "Skipped white line\n";
+#		print "Skipped white line\n";
 		next;
 	}
 #	print $line;
@@ -62,7 +62,7 @@ while (@input > 0) {
 
 	# this is a port scan or similar
 	if (($attack, $ip, $port, $date) = ($line =~ m|^\[([^\]]+)\] from source: (\d+\.\d+\.\d+\.\d+), port (\d+), \S+, (.+)$|)) {
-		print "IPLocator request...\n";
+#		print "IPLocator request...\n";
 #		next;
 		my @curl_output = readpipe("curl -sS 'http://www.geobytes.com/IpLocator.htm?GetLocation&template=php3.txt&IpAddress=$ip'");
 		foreach (@curl_output) {
@@ -76,6 +76,7 @@ while (@input > 0) {
 		# the file gets closed to let other processes append further data
 		if (exists $attacker_info{locationcode} and $attacker_info{locationcode} eq "Limit Exceeded") {
 			print "Limit exceeded: ", scalar localtime(), "\n";
+#			push(@unprocessed, "Limit exceeded: ", scalar localtime(), "\n");
 			close(INPUT);
 			$dbh->disconnect();
 			open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!";
@@ -85,7 +86,7 @@ while (@input > 0) {
 			print "Waiting one hour for the next batch.\n";
 			sleep 3630;
 	
-			if (check_online()) { exit 1; }
+			check_online();
 			open(INPUT, '<', $datafile) || die "Error reading $datafile, $!";
 			@input = <INPUT>;
 			$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", $dbargs);
@@ -107,7 +108,7 @@ while (@input > 0) {
 		
 		# sometimes IP locations are unknown
 		if ($attacker_info{known} eq "false") {
-			print "Not known: $line";
+#			print "Not known: $line";
 			$dbh->do("INSERT INTO attackers(attack, attacker, port, attack_date, known)
 		 VALUES ($attack_id, '$ip', $port, $date, '$attacker_info{known}');");
 		} else {
@@ -128,7 +129,7 @@ while (@input > 0) {
 
 	# this is a bad WLAN access
 	} elsif (($attack, $mac, $date) = ($line =~ m|^\[([^\]]+)\] from MAC address (\S+), \S+, (.+)$|)) {
-		print "WLAN access...\n";
+#		print "WLAN access...\n";
 #		next;
 		# looks up the attack_type key, adds it if unknown
 		$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
@@ -170,8 +171,10 @@ sub check_online {
 	my $p = Net::Ping->new();
 	my $status = $p->ping('www.geobytes.com');
 	$p->close();
-	if ($status) { print "Ping failed: exiting.\n"; }
-	return $status;
+	if ($status) {
+		print "Ping failed: exiting.\n";
+		exit 1;
+	}
 }
 
 sub save_unprocessed {
