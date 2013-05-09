@@ -19,23 +19,28 @@ use strict;
 use DBI;
 use Date::Parse;
 use Net::Ping;
+use Fcntl qw(:DEFAULT :flock);
 
-#$\ = "\n";
+# parameters
+my $basedir = "$ENV{HOME}/UNIX/etc";
+
+my $lockfile = "$ENV{TMPDIR}/log_attacks.pl.pid";
+my $datafile = "$basedir/locate_attackers_IPs/list.txt";
+my $logfile  = "$basedir/locate_attackers_IPs/log.txt";
+my $dbfile   = "$basedir/locate_attackers_IPs/attackers.db";
+
+open(LOCK, '>', $lockfile) || die "Error writing lock file $lockfile, $!\n";
+flock(LOCK, LOCK_EX | LOCK_NB) || die "Error getting lock: already running script?\n";
+print LOCK $$, "\n";
 
 # checks for reachability of the iplocator and of Internet in general
 check_online();
-
-# parameters
-my $datafile = '/Users/olaf/UNIX/locate_attackers_IPs/data/list.txt';
-my $logfile = '/Users/olaf/UNIX/locate_attackers_IPs/data/log.txt';
-my $dbfile   = '/Users/olaf/UNIX/locate_attackers_IPs/data/attackers.db';
-
 my $dbargs = {AutoCommit => 0, PrintError => 1};
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", $dbargs);
 if ($dbh->err()) { die "$DBI::errstr\n"; }
 
 # puts the whole file in memory, but keeps the file open and locked to avoid changes
-open(INPUT, '<', $datafile) || die "Error reading $datafile, $!";
+open(INPUT, '<', $datafile) || die "Error reading $datafile, $!\n";
 my @input = <INPUT>;
 my @unprocessed;
 
@@ -79,7 +84,7 @@ while (@input > 0) {
 #			push(@unprocessed, "Limit exceeded: ", scalar localtime(), "\n");
 			close(INPUT);
 			$dbh->disconnect();
-			open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!";
+			open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!\n";
 			print OUTPUT @input;
 			close(OUTPUT);
 			save_unprocessed();
@@ -87,7 +92,7 @@ while (@input > 0) {
 			sleep 3630;
 	
 			check_online();
-			open(INPUT, '<', $datafile) || die "Error reading $datafile, $!";
+			open(INPUT, '<', $datafile) || die "Error reading $datafile, $!\n";
 			@input = <INPUT>;
 			$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", $dbargs);
 			if ($dbh->err()) { die "$DBI::errstr\n"; }
@@ -158,11 +163,12 @@ while (@input > 0) {
 }
 close(INPUT);
 # at this point all lines are processed, clean the datafile
-open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!";
+open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!\n";
 close(OUTPUT);
 save_unprocessed();
 
 $dbh->disconnect();
+close(LOCK);
 
 exit 0;
 
@@ -180,7 +186,7 @@ sub check_online {
 sub save_unprocessed {
 	if (@unprocessed > 0) {
 #		print @unprocessed;
-		open (OUTPUT, '>>', $logfile) || die "Error writing $logfile, $!";
+		open (OUTPUT, '>>', $logfile) || die "Error writing $logfile, $!\n";
 		foreach my $unmatched (@unprocessed) { print OUTPUT $unmatched; }
 		close(OUTPUT);
 		@unprocessed = undef;
