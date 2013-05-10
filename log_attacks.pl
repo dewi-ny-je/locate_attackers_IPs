@@ -35,7 +35,7 @@ print LOCK $$, "\n";
 
 # checks for reachability of the iplocator and of Internet in general
 check_online();
-my $dbargs = {AutoCommit => 0, PrintError => 1};
+my $dbargs = {AutoCommit => 1, PrintError => 1};
 my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", $dbargs);
 if ($dbh->err()) { die "$DBI::errstr\n"; }
 
@@ -82,11 +82,7 @@ while (@input > 0) {
 		if (exists $attacker_info{locationcode} and $attacker_info{locationcode} eq "Limit Exceeded") {
 			print "Limit exceeded: ", scalar localtime(), "\n";
 #			push(@unprocessed, "Limit exceeded: ", scalar localtime(), "\n");
-			close(INPUT);
-			$dbh->disconnect();
-			open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!\n";
-			print OUTPUT @input;
-			close(OUTPUT);
+			update_source();
 			save_unprocessed();
 			print "Waiting one hour for the next batch.\n";
 			sleep 3630;
@@ -101,7 +97,7 @@ while (@input > 0) {
 		
 		# checks the attack_types for the correct attack key, adds it if unknown
 		$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
-		if ($dbh->err()) { die "DBI error: $DBI::errstr\n"; }
+		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
 		if (!defined($attack_id)) {
 			$dbh->do("INSERT INTO attack_types (name) VALUES ('$attack');");
 			if ($dbh->err()) { die "DBI error: $DBI::errstr\n"; }
@@ -128,7 +124,7 @@ while (@input > 0) {
 			  '$attacker_info{latitude}', '$attacker_info{longitude}', '$attacker_info{timezone}', 
 			  $attacker_info{certainty});");
 		}
-		if ($dbh->err()) { die "DBI error: $DBI::errstr\n"; }
+		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
 		# "next" goes to the "continue" block
 		next;
 
@@ -138,17 +134,17 @@ while (@input > 0) {
 #		next;
 		# looks up the attack_type key, adds it if unknown
 		$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
-		if ($dbh->err()) { die "DBI error: $DBI::errstr\n"; }
+		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
 		if (!defined($attack_id)) {
 			$dbh->do("INSERT INTO attack_types (name) VALUES ('$attack');");
-			if ($dbh->err()) { die "DBI error: $DBI::errstr\n"; }
+			if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
 			$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
 		}
 		
 		$date = str2time($date);
 		
 		$dbh->do("INSERT INTO wlan(attack, attack_date, mac) VALUES ($attack_id, $date, '$mac');");
-		if ($dbh->err()) { die "$DBI::errstr\n"; }
+		if ($dbh->err()) { update_source(); die "$DBI::errstr\n"; }
 		next;
 
 	# other problems
@@ -158,7 +154,7 @@ while (@input > 0) {
 		next;
 	}
 } continue {
-	$dbh->commit();
+#	$dbh->commit();
 	shift(@input);
 }
 close(INPUT);
@@ -191,4 +187,12 @@ sub save_unprocessed {
 		close(OUTPUT);
 		@unprocessed = undef;
 	}
+}
+
+sub update_source {
+	close(INPUT);
+	$dbh->disconnect();
+	open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!\n";
+	print OUTPUT @input;
+	close(OUTPUT);
 }
