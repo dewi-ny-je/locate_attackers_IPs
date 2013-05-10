@@ -95,15 +95,7 @@ while (@input > 0) {
 			redo;
 		}
 		
-		# checks the attack_types for the correct attack key, adds it if unknown
-		$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
-		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
-		if (!defined($attack_id)) {
-			$dbh->do("INSERT INTO attack_types (name) VALUES ('$attack');");
-			if ($dbh->err()) { die "DBI error: $DBI::errstr\n"; }
-			$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
-		}
-		
+		$attack_id = get_attack_id($attack);
 		# dates in seconds from Epoch
 		$date = str2time($date);
 		
@@ -111,17 +103,28 @@ while (@input > 0) {
 		if ($attacker_info{known} eq "false") {
 #			print "Not known: $line";
 			$dbh->do("INSERT INTO attackers(attack, attacker, port, attack_date, known)
-		 VALUES ($attack_id, '$ip', $port, $date, '$attacker_info{known}');");
+		 VALUES ($attack_id, \"$ip\", $port, $date, \"$attacker_info{known}\");");
 		} else {
+# 			print "INSERT INTO attackers(attack, attacker, port, attack_date, known, locationcode,
+# 			  fips104, iso2, iso3, ison, internet, countryid, country, regionid, region, regioncode,
+# 			  adm1code, cityid, city, latitude, longitude, timezone, certainty)
+# 			 VALUES ($attack_id, '$ip', $port, $date, '$attacker_info{known}', '$attacker_info{locationcode}',
+# 			  '$attacker_info{fips104}', '$attacker_info{iso2}', '$attacker_info{iso3}', $attacker_info{ison}, 
+# 			  '$attacker_info{internet}', $attacker_info{countryid}, '$attacker_info{country}', 
+# 			  '$attacker_info{regionid}', '$attacker_info{region}', '$attacker_info{regioncode}',
+# 			  '$attacker_info{adm1code}', $attacker_info{cityid}, '$attacker_info{city}', 
+# 			  '$attacker_info{latitude}', '$attacker_info{longitude}', '$attacker_info{timezone}', 
+# 			  $attacker_info{certainty});\n";
+# 			  
 			$dbh->do("INSERT INTO attackers(attack, attacker, port, attack_date, known, locationcode,
 			  fips104, iso2, iso3, ison, internet, countryid, country, regionid, region, regioncode,
 			  adm1code, cityid, city, latitude, longitude, timezone, certainty)
-			 VALUES ($attack_id, '$ip', $port, $date, '$attacker_info{known}', '$attacker_info{locationcode}',
-			  '$attacker_info{fips104}', '$attacker_info{iso2}', '$attacker_info{iso3}', $attacker_info{ison}, 
-			  '$attacker_info{internet}', $attacker_info{countryid}, '$attacker_info{country}', 
-			  '$attacker_info{regionid}', '$attacker_info{region}', '$attacker_info{regioncode}',
-			  '$attacker_info{adm1code}', $attacker_info{cityid}, '$attacker_info{city}', 
-			  '$attacker_info{latitude}', '$attacker_info{longitude}', '$attacker_info{timezone}', 
+			 VALUES ($attack_id, \"$ip\", $port, $date, \"$attacker_info{known}\", \"$attacker_info{locationcode}\",
+			  \"$attacker_info{fips104}\", \"$attacker_info{iso2}\", \"$attacker_info{iso3}\", $attacker_info{ison}, 
+			  \"$attacker_info{internet}\", $attacker_info{countryid}, \"$attacker_info{country}\", 
+			  \"$attacker_info{regionid}\", \"$attacker_info{region}\", \"$attacker_info{regioncode}\",
+			  \"$attacker_info{adm1code}\", $attacker_info{cityid}, \"$attacker_info{city}\", 
+			  \"$attacker_info{latitude}\", \"$attacker_info{longitude}\", \"$attacker_info{timezone}\", 
 			  $attacker_info{certainty});");
 		}
 		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
@@ -133,13 +136,7 @@ while (@input > 0) {
 #		print "WLAN access...\n";
 #		next;
 		# looks up the attack_type key, adds it if unknown
-		$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
-		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
-		if (!defined($attack_id)) {
-			$dbh->do("INSERT INTO attack_types (name) VALUES ('$attack');");
-			if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
-			$attack_id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$attack';");
-		}
+		$attack_id = get_attack_id($attack);
 		
 		$date = str2time($date);
 		
@@ -195,4 +192,16 @@ sub update_source {
 	open(OUTPUT, '>', $datafile) || die "Error writing $datafile, $!\n";
 	print OUTPUT @input;
 	close(OUTPUT);
+}
+
+sub get_attack_id {
+	# looks up the attack_type key, adds it if unknown
+	my $id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name=\"$_\";");
+	if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
+	if (!defined($id)) {
+		$dbh->do("INSERT INTO attack_types (name) VALUES (\"$_\");");
+		if ($dbh->err()) { update_source(); die "DBI error: $DBI::errstr\n"; }
+		$id = $dbh->selectrow_array("SELECT key FROM attack_types WHERE name='$_';");
+	}
+	return $id;
 }
